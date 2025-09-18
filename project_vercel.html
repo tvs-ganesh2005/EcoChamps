@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoChamps - Environmental Education</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Import a clean and modern font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom styles for drag-and-drop game */
+        .waste-item.dragging {
+            opacity: 0.5;
+            transform: scale(1.1);
+        }
+        .bin.drag-over {
+            border-style: solid;
+            border-color: #2563eb; /* blue-600 */
+            transform: scale(1.05);
+        }
+        .badge-container .badge-tooltip {
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .badge-container:hover .badge-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+        /* Custom styles for game feedback pop */
+        .feedback-pop {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #ef4444; /* red-500 */
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: bold;
+            font-size: 0.875rem;
+            animation: pop-fade 1.5s forwards;
+            white-space: nowrap;
+        }
+        @keyframes pop-fade {
+            0% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -20px) scale(1.2); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div id="app-root" class="container mx-auto p-4 max-w-6xl">
+        <!-- App content will be rendered here by JavaScript -->
+    </div>
+
+    <script>
+        // --- CONSTANTS & CONFIGS ---
+        const BADGE_DEFINITIONS = {
+            'sorting_sprout': { name: 'Sorting Sprout', icon: '🌱', description: 'Completed an Easy Level in the Segregation Game.' },
+            'recycling_ranger': { name: 'Recycling Ranger', icon: '♻️', description: 'Completed a Medium Level in the Segregation Game.' },
+            'eco_legend': { name: 'Eco-Legend', icon: '🌍', description: 'Mastered a Hard Level in the Segregation Game.' }
+        };
+
+        const WASTE_ITEM_BANK = [
+            // Wet Waste (Organic/Compostable)
+            { name: '🍎', type: 'organic', category: 'wet' }, { name: '🍌', type: 'organic', category: 'wet' }, { name: '🍕', type: 'organic', category: 'wet' },
+            { name: '🥕', type: 'organic', category: 'wet' }, { name: '🥬', type: 'organic', category: 'wet' }, { name: '🍓', type: 'organic', category: 'wet' },
+            { name: '🥚', type: 'organic', category: 'wet' }, { name: '🍞', type: 'organic', category: 'wet' }, { name: '🌽', type: 'organic', category: 'wet' },
+            { name: '🍄', type: 'organic', category: 'wet' }, { name: '🍉', type: 'organic', category: 'wet' }, { name: '🥑', type: 'organic', category: 'wet' },
+            { name: '🍖', type: 'organic', category: 'wet' }, { name: '🐟', type: 'organic', category: 'wet' }, { name: '🌼', type: 'organic', category: 'wet' },
+            { name: '🍂', type: 'organic', category: 'wet' }, { name: '☕', type: 'organic', category: 'wet' }, { name: '🍤', type: 'organic', category: 'wet' },
+
+            // Dry Waste (Recyclable/Non-Recyclable)
+            { name: '📰', type: 'paper', category: 'dry' }, { name: '📦', type: 'paper', category: 'dry' }, { name: '✉️', type: 'paper', category: 'dry' },
+            { name: '📚', type: 'paper', category: 'dry' }, { name: '🗞️', type: 'paper', category: 'dry' }, { name: '🥡', type: 'paper', category: 'dry' },
+            { name: '📜', type: 'paper', category: 'dry' }, { name: '🧻', type: 'paper', category: 'dry' }, { name: '🎫', type: 'paper', category: 'dry' },
+            { name: '🧾', type: 'paper', category: 'dry' }, { name: '🥤', type: 'plastic', category: 'dry' }, { name: '💧', type: 'plastic', category: 'dry' },
+            { name: '🧴', type: 'plastic', category: 'dry' }, { name: '🛍️', type: 'plastic', category: 'dry' }, { name: '🧸', type: 'plastic', category: 'dry' },
+            { name: '💳', type: 'plastic', category: 'dry' }, { name: '🍴', type: 'plastic', category: 'dry' }, { name: '🎈', type: 'plastic', category: 'dry' },
+            { name: '💿', type: 'plastic', category: 'dry' }, { name: '🕹️', type: 'plastic', category: 'dry' }, { name: '💡', type: 'ewaste', category: 'dry' },
+            { name: '🔋', type: 'ewaste', category: 'dry' }, { name: '📱', type: 'ewaste', category: 'dry' }, { name: '💻', type: 'ewaste', category: 'dry' },
+            { name: '🖱️', type: 'ewaste', category: 'dry' }, { name: '⌨️', type: 'ewaste', category: 'dry' }, { name: '🔌', type: 'ewaste', category: 'dry' },
+            { name: '📺', type: 'ewaste', category: 'dry' }, { name: '📠', type: 'ewaste', category: 'dry' }, { name: '📻', type: 'ewaste', category: 'dry' },
+            { name: '🍾', type: 'glass', category: 'dry' }, { name: '🍷', type: 'glass', category: 'dry' }, { name: '🏺', type: 'glass', category: 'dry' },
+            { name: '🔬', type: 'glass', category: 'dry' }, { name: '🍸', type: 'glass', category: 'dry' }, { name: '🔍', type: 'glass', category: 'dry' },
+            { name: '🪟', type: 'glass', category: 'dry' }, { name: '🥫', type: 'metal', category: 'dry' }, { name: '🔩', type: 'metal', category: 'dry' },
+            { name: '🗝️', type: 'metal', category: 'dry' }, { name: '📎', type: 'metal', category: 'dry' }, { name: '🔗', type: 'metal', category: 'dry' },
+            { name: '⚙️', type: 'metal', category: 'dry' }, { name: '🥄', type: 'metal', category: 'dry' }, { name: '💉', type: 'hazardous', category: 'dry' },
+            { name: '💊', type: 'hazardous', category: 'dry' }, { name: '🌡️', type: 'hazardous', category: 'dry' }, { name: '🧪', type: 'hazardous', category: 'dry' },
+            { name: '☣️', type: 'hazardous', category: 'dry' }, { name: '☠️', type: 'hazardous', category: 'dry' }, { name: '🔥', type: 'hazardous', category: 'dry' },
+        ];
+        
+        const QUIZ_QUESTIONS = {
+            1: [
+                // Part 1
+                { question: "Which of these is typically NOT biodegradable?", options: ["Banana Peel", "Styrofoam Cup", "Apple Core", "Paper Towel"], correctAnswer: "Styrofoam Cup", points: 2 },
+                { question: "What is the primary purpose of a landfill?", options: ["Recycling", "Energy generation", "Waste disposal", "Composting"], correctAnswer: "Waste disposal", points: 2 },
+                { question: "What does the 'Reduce' in 'Reduce, Reuse, Recycle' mean?", options: ["To use less of an item", "To use an item again", "To turn an item into something new", "To throw an item away"], correctAnswer: "To use less of an item", points: 2 },
+                { question: "Which of these is a form of electronic waste?", options: ["Newspaper", "Cardboard box", "Plastic bottle", "Old mobile phone"], correctAnswer: "Old mobile phone", points: 2 },
+                { question: "What type of waste is a potato peel?", options: ["Wet waste", "Dry waste", "Hazardous waste", "E-waste"], correctAnswer: "Wet waste", points: 2 },
+                { question: "The process of converting waste materials into new materials and objects is called?", options: ["Upcycling", "Composting", "Recycling", "Incineration"], correctAnswer: "Recycling", points: 2 },
+                { question: "Which item should be put in a composting bin?", options: ["Glass jar", "Metal can", "Food scraps", "Plastic bag"], correctAnswer: "Food scraps", points: 2 },
+                { question: "What is a major environmental benefit of recycling paper?", options: ["Saves energy", "Reduces noise pollution", "Saves trees", "Cleans the ocean"], correctAnswer: "Saves trees", points: 2 },
+                { question: "Which waste is classified as 'Dry Waste'?", options: ["Rotten fruit", "Used tea leaves", "Plastic bottle", "Fish bones"], correctAnswer: "Plastic bottle", points: 2 },
+                { question: "Waste management is crucial to protect which of the following?", options: ["Air quality", "Soil health", "Water bodies", "All of the above"], correctAnswer: "All of the above", points: 2 },
+            ],
+            2: [
+                // Part 2
+                { question: "Which of these is typically NOT biodegradable?", options: ["Banana Peel", "Styrofoam Cup", "Apple Core", "Paper Towel"], correctAnswer: "Styrofoam Cup", points: 2 },
+                { question: "What is the primary purpose of a landfill?", options: ["Recycling", "Energy generation", "Waste disposal", "Composting"], correctAnswer: "Waste disposal", points: 2 },
+                { question: "What does the 'Reduce' in 'Reduce, Reuse, Recycle' mean?", options: ["To use less of an item", "To use an item again", "To turn an item into something new", "To throw an item away"], correctAnswer: "To use less of an item", points: 2 },
+                { question: "Which of these is a form of electronic waste?", options: ["Newspaper", "Cardboard box", "Plastic bottle", "Old mobile phone"], correctAnswer: "Old mobile phone", points: 2 },
+                { question: "What type of waste is a potato peel?", options: ["Wet waste", "Dry waste", "Hazardous waste", "E-waste"], correctAnswer: "Wet waste", points: 2 },
+                { question: "The process of converting waste materials into new materials and objects is called?", options: ["Upcycling", "Composting", "Recycling", "Incineration"], correctAnswer: "Recycling", points: 2 },
+                { question: "Which item should be put in a composting bin?", options: ["Glass jar", "Metal can", "Food scraps", "Plastic bag"], correctAnswer: "Food scraps", points: 2 },
+                { question: "What is a major environmental benefit of recycling paper?", options: ["Saves energy", "Reduces noise pollution", "Saves trees", "Cleans the ocean"], correctAnswer: "Saves trees", points: 2 },
+                { question: "Which waste is classified as 'Dry Waste'?", options: ["Rotten fruit", "Used tea leaves", "Plastic bottle", "Fish bones"], correctAnswer: "Plastic bottle", points: 2 },
+                { question: "Waste management is crucial to protect which of the following?", options: ["Air quality", "Soil health", "Water bodies", "All of the above"], correctAnswer: "All of the above", points: 2 },
+            ],
+            3: [
+                // Part 3
+                { question: "What is the primary purpose of a landfill?", options: ["Recycling", "Energy generation", "Waste disposal", "Composting"], correctAnswer: "Waste disposal", points: 2 },
+                { question: "Which of these is a form of electronic waste?", options: ["Newspaper", "Cardboard box", "Plastic bottle", "Old mobile phone"], correctAnswer: "Old mobile phone", points: 2 },
+                { question: "What does the 'Reduce' in 'Reduce, Reuse, Recycle' mean?", options: ["To use less of an item", "To use an item again", "To turn an item into something new", "To throw an item away"], correctAnswer: "To use less of an item", points: 2 },
+                { question: "Which of these is typically NOT biodegradable?", options: ["Banana Peel", "Styrofoam Cup", "Apple Core", "Paper Towel"], correctAnswer: "Styrofoam Cup", points: 2 },
+                { question: "What type of waste is a potato peel?", options: ["Wet waste", "Dry waste", "Hazardous waste", "E-waste"], correctAnswer: "Wet waste", points: 2 },
+                { question: "The process of converting waste materials into new materials and objects is called?", options: ["Upcycling", "Composting", "Recycling", "Incineration"], correctAnswer: "Recycling", points: 2 },
+                { question: "Which item should be put in a composting bin?", options: ["Glass jar", "Metal can", "Food scraps", "Plastic bag"], correctAnswer: "Food scraps", points: 2 },
+                { question: "What is a major environmental benefit of recycling paper?", options: ["Saves energy", "Reduces noise pollution", "Saves trees", "Cleans the ocean"], correctAnswer: "Saves trees", points: 2 },
+                { question: "Which waste is classified as 'Dry Waste'?", options: ["Rotten fruit", "Used tea leaves", "Plastic bottle", "Fish bones"], correctAnswer: "Plastic bottle", points: 2 },
+                { question: "Waste management is crucial to protect which of the following?", options: ["Air quality", "Soil health", "Water bodies", "All of the above"], correctAnswer: "All of the above", points: 2 },
+            ],
+            4: [
+                // Part 4
+                { question: "The '3 Rs' stand for Reduce, Reuse, and...?", options: ["Rebuild", "Recycle", "Rejoice", "Remove"], correctAnswer: "Recycle", points: 2 },
+                { question: "Electronic waste is also known as...?", options: ["E-Waste", "Gray Waste", "Tech Trash", "Circuit Junk"], correctAnswer: "E-Waste", points: 2 },
+                { question: "What color bin is typically for paper waste?", options: ["Green", "Red", "Blue", "Yellow"], correctAnswer: "Blue", points: 2 },
+                { question: "Which is a biodegradable item?", options: ["Styrofoam Cup", "Glass Jar", "Banana Peel", "Plastic Wrap"], correctAnswer: "Banana Peel", points: 2 },
+                { question: "What is a landfill?", options: ["A park", "A water reservoir", "A site for waste disposal", "A recycling center"], correctAnswer: "A site for waste disposal", points: 2 },
+                { question: "Turning old tires into a playground surface is an example of?", options: ["Reducing", "Upcycling", "Composting", "Incineration"], correctAnswer: "Upcycling", points: 2 },
+                { question: "Hazardous waste includes items like...?", options: ["Apple cores", "Batteries", "Cardboard boxes", "Water bottles"], correctAnswer: "Batteries", points: 2 },
+                { question: "What is the primary benefit of recycling aluminum?", options: ["Saves energy", "Creates water", "Reduces noise", "Improves soil"], correctAnswer: "Saves energy", points: 2 },
+                { question: "Which item is NOT recyclable?", options: ["Glass Bottle", "Plastic Toy", "Newspaper", "Aluminum Can"], correctAnswer: "Plastic Toy", points: 2 },
+                { question: "What does composting create?", options: ["Fertilizer", "Plastic", "Methane Gas", "Pollution"], correctAnswer: "Fertilizer", points: 2 },
+            ],
+            5: [
+                // Part 5
+                { question: "The '3 Rs' stand for Reduce, Reuse, and...?", options: ["Rebuild", "Recycle", "Rejoice", "Remove"], correctAnswer: "Recycle", points: 2 },
+                { question: "Electronic waste is also known as...?", options: ["E-Waste", "Gray Waste", "Tech Trash", "Circuit Junk"], correctAnswer: "E-Waste", points: 2 },
+                { question: "What color bin is typically for paper waste?", options: ["Green", "Red", "Blue", "Yellow"], correctAnswer: "Blue", points: 2 },
+                { question: "Which is a biodegradable item?", options: ["Styrofoam Cup", "Glass Jar", "Banana Peel", "Plastic Wrap"], correctAnswer: "Banana Peel", points: 2 },
+                { question: "What is a landfill?", options: ["A park", "A water reservoir", "A site for waste disposal", "A recycling center"], correctAnswer: "A site for waste disposal", points: 2 },
+                { question: "Turning old tires into a playground surface is an example of?", options: ["Reducing", "Upcycling", "Composting", "Incineration"], correctAnswer: "Upcycling", points: 2 },
+                { question: "Hazardous waste includes items like...?", options: ["Apple cores", "Batteries", "Cardboard boxes", "Water bottles"], correctAnswer: "Batteries", points: 2 },
+                { question: "What is the primary benefit of recycling aluminum?", options: ["Saves energy", "Creates water", "Reduces noise", "Improves soil"], correctAnswer: "Saves energy", points: 2 },
+                { question: "Which item is NOT recyclable?", options: ["Glass Bottle", "Plastic Toy", "Newspaper", "Aluminum Can"], correctAnswer: "Plastic Toy", points: 2 },
+                { question: "What does composting create?", options: ["Fertilizer", "Plastic", "Methane Gas", "Pollution"], correctAnswer: "Fertilizer", points: 2 },
+            ],
+            // More questions can be added for other modules/parts
+            6: [
+                { question: "What percentage of Earth's water is fresh water?", options: ["50%", "25%", "10%", "3%"], correctAnswer: "3%", points: 2 },
+                { question: "Which activity uses the most water in a typical home?", options: ["Leaky Faucets", "Washing Dishes", "Showering", "Flushing Toilets"], correctAnswer: "Flushing Toilets", points: 2 },
+                { question: "How can you conserve water in your garden?", options: ["Water at midday", "Use a sprinkler", "Install drip irrigation", "Use a hose to clean"], correctAnswer: "Install drip irrigation", points: 2 },
+                { question: "What is a major source of water pollution?", options: ["Industrial waste", "Evaporation", "Wind", "Rainwater"], correctAnswer: "Industrial waste", points: 2 },
+                { question: "What is a natural way to filter water?", options: ["Boiling", "Using sand and gravel", "Adding salt", "Shaking it vigorously"], correctAnswer: "Using sand and gravel", points: 2 },
+                { question: "What does 'potable' water mean?", options: ["Saltwater", "Polluted water", "Water that is safe to drink", "Water that is used for farming"], correctAnswer: "Water that is safe to drink", points: 2 },
+                { question: "Which of these is a way to reduce water waste?", options: ["Leaving the tap running", "Taking longer showers", "Fixing leaky faucets", "Washing a car with a hose"], correctAnswer: "Fixing leaky faucets", points: 2 },
+                { question: "What is a water footprint?", options: ["A mark made by a wet shoe", "The amount of water used to produce goods and services", "The distance water travels to your home", "A measurement of water pollution"], correctAnswer: "The amount of water used to produce goods and services", points: 2 },
+                { question: "Why is water conservation important?", options: ["To make clean water cheaper", "To save energy and protect habitats", "To make it rain more often", "To increase river flow"], correctAnswer: "To save energy and protect habitats", points: 2 },
+                { question: "Which of these is a non-point source of pollution?", options: ["A factory drainpipe", "Runoff from a large agricultural area", "A leaking oil tanker", "A sewer outlet"], correctAnswer: "Runoff from a large agricultural area", points: 2 },
+            ],
+            7: [
+                { question: "What percentage of Earth's water is fresh water?", options: ["50%", "25%", "10%", "3%"], correctAnswer: "3%", points: 2 },
+                { question: "Which activity uses the most water in a typical home?", options: ["Leaky Faucets", "Washing Dishes", "Showering", "Flushing Toilets"], correctAnswer: "Flushing Toilets", points: 2 },
+                { question: "How can you conserve water in your garden?", options: ["Water at midday", "Use a sprinkler", "Install drip irrigation", "Use a hose to clean"], correctAnswer: "Install drip irrigation", points: 2 },
+                { question: "What is a major source of water pollution?", options: ["Industrial waste", "Evaporation", "Wind", "Rainwater"], correctAnswer: "Industrial waste", points: 2 },
+                { question: "What is a natural way to filter water?", options: ["Boiling", "Using sand and gravel", "Adding salt", "Shaking it vigorously"], correctAnswer: "Using sand and gravel", points: 2 },
+                { question: "What does 'potable' water mean?", options: ["Saltwater", "Polluted water", "Water that is safe to drink", "Water that is used for farming"], correctAnswer: "Water that is safe to drink", points: 2 },
+                { question: "Which of these is a way to reduce water waste?", options: ["Leaving the tap running", "Taking longer showers", "Fixing leaky faucets", "Washing a car with a hose"], correctAnswer: "Fixing leaky faucets", points: 2 },
+                { question: "What is a water footprint?", options: ["A mark made by a wet shoe", "The amount of water used to produce goods and services", "The distance water travels to your home", "A measurement of water pollution"], correctAnswer: "The amount of water used to produce goods and services", points: 2 },
+                { question: "Why is water conservation important?", options: ["To make clean water cheaper", "To save energy and protect habitats", "To make it rain more often", "To increase river flow"], correctAnswer: "To save energy and protect habitats", points: 2 },
+                { question: "Which of these is a non-point source of pollution?", options: ["A factory drainpipe", "Runoff from a large agricultural area", "A leaking oil tanker", "A sewer outlet"], correctAnswer: "Runoff from a large agricultural area", points: 2 },
+            ],
+            8: [
+                { question: "What is a major source of water pollution?", options: ["Industrial waste", "Evaporation", "Wind", "Rainwater"], correctAnswer: "Industrial waste", points: 2 },
+                { question: "Which activity uses the most water in a typical home?", options: ["Leaky Faucets", "Washing Dishes", "Showering", "Flushing Toilets"], correctAnswer: "Flushing Toilets", points: 2 },
+                { question: "What percentage of Earth's water is fresh water?", options: ["50%", "25%", "10%", "3%"], correctAnswer: "3%", points: 2 },
+                { question: "How can you conserve water in your garden?", options: ["Water at midday", "Use a sprinkler", "Install drip irrigation", "Use a hose to clean"], correctAnswer: "Install drip irrigation", points: 2 },
+                { question: "What is a natural way to filter water?", options: ["Boiling", "Using sand and gravel", "Adding salt", "Shaking it vigorously"], correctAnswer: "Using sand and gravel", points: 2 },
+                { question: "What does 'potable' water mean?", options: ["Saltwater", "Polluted water", "Water that is safe to drink", "Water that is used for farming"], correctAnswer: "Water that is safe to drink", points: 2 },
+                { question: "Which of these is a way to reduce water waste?", options: ["Leaving the tap running", "Taking longer showers", "Fixing leaky faucets", "Washing a car with a hose"], correctAnswer: "Fixing leaky faucets", points: 2 },
+                { question: "What is a water footprint?", options: ["A mark made by a wet shoe", "The amount of water used to produce goods and services", "The distance water travels to your home", "A measurement of water pollution"], correctAnswer: "The amount of water used to produce goods and services", points: 2 },
+                { question: "Why is water conservation important?", options: ["To make clean water cheaper", "To save energy and protect habitats", "To make it rain more often", "To increase river flow"], correctAnswer: "To save energy and protect habitats", points: 2 },
+                { question: "Which of these is a non-point source of pollution?", options: ["A factory drainpipe", "Runoff from a large agricultural area", "A leaking oil tanker", "A sewer outlet"], correctAnswer: "Runoff from a large agricultural area", points: 2 },
+            ],
+            9: [
+                { question: "The excessive use of fertilizers in agriculture leads to which type of pollution?", options: ["Air Pollution", "Noise Pollution", "Soil and Water Pollution", "Light Pollution"], correctAnswer: "Soil and Water Pollution", points: 2 },
+                { question: "What is the 'Greenhouse Effect'?", options: ["Plants growing faster in a greenhouse", "The trapping of the sun's warmth in the atmosphere", "The cooling of the Earth's surface", "A new type of eco-friendly house"], correctAnswer: "The trapping of the sun's warmth in the atmosphere", points: 2 },
+                { question: "What is the main cause of acid rain?", options: ["Carbon Dioxide", "Sulfur Dioxide & Nitrogen Oxides", "Methane", "Ozone"], correctAnswer: "Sulfur Dioxide & Nitrogen Oxides", points: 2 },
+                { question: "What does the term 'smog' refer to?", options: ["A type of cloud", "A mix of smoke and fog", "Clean air", "A weather phenomenon"], correctAnswer: "A mix of smoke and fog", points: 2 },
+                { question: "Plastic pollution is most harmful to...?", options: ["Air quality", "Mountain ecosystems", "Marine life", "Desert plants"], correctAnswer: "Marine life", points: 2 },
+                { question: "What is light pollution?", options: ["Too much sunlight", "Excessive artificial light at night", "A broken light bulb", "Colorful lights"], correctAnswer: "Excessive artificial light at night", points: 2 },
+                { question: "What is a consequence of soil pollution?", options: ["Healthier crops", "Reduced crop yield and contaminated food", "More fertile soil", "Cleaner groundwater"], correctAnswer: "Reduced crop yield and contaminated food", points: 2 },
+                { question: "What unit is used to measure the intensity of noise pollution?", options: ["Hertz (Hz)", "Decibels (dB)", "Meters (m)", "Joules (J)"], correctAnswer: "Decibels (dB)", points: 2 },
+                { question: "Which of these is a non-point source of pollution?", options: ["A factory drainpipe", "Runoff from a large agricultural area", "A leaking oil tanker", "A sewer outlet"], correctAnswer: "Runoff from a large agricultural area", points: 2 },
+                { question: "What is the main cause of acid rain?", options: ["Carbon Dioxide", "Sulfur Dioxide & Nitrogen Oxides", "Methane", "Ozone"], correctAnswer: "Sulfur Dioxide & Nitrogen Oxides", points: 2 },
+            ],
+            10: [
+                { question: "What is the main cause of acid rain?", options: ["Carbon Dioxide", "Sulfur Dioxide & Nitrogen Oxides", "Methane", "Ozone"], correctAnswer: "Sulfur Dioxide & Nitrogen Oxides", points: 2 },
+                { question: "What does the term 'smog' refer to?", options: ["A type of cloud", "A mix of smoke and fog", "Clean air", "A weather phenomenon"], correctAnswer: "A mix of smoke and fog", points: 2 },
+                { question: "Plastic pollution is most harmful to...?", options: ["Air quality", "Mountain ecosystems", "Marine life", "Desert plants"], correctAnswer: "Marine life", points: 2 },
+                { question: "What is light pollution?", options: ["Too much sunlight", "Excessive artificial light at night", "A broken light bulb", "Colorful lights"], correctAnswer: "Excessive artificial light at night", points: 2 },
+                { question: "What is a consequence of soil pollution?", options: ["Healthier crops", "Reduced crop yield and contaminated food", "More fertile soil", "Cleaner groundwater"], correctAnswer: "Reduced crop yield and contaminated food", points: 2 },
+                { question: "What unit is used to measure the intensity of noise pollution?", options: ["Hertz (Hz)", "Decibels (dB)", "Meters (m)", "Joules (J)"], correctAnswer: "Decibels (dB)", points: 2 },
+                { question: "The excessive use of fertilizers in agriculture leads to which type of pollution?", options: ["Air Pollution", "Noise Pollution", "Soil and Water Pollution", "Light Pollution"], correctAnswer: "Soil and Water Pollution", points: 2 },
+                { question: "What is the 'Greenhouse Effect'?", options: ["Plants growing faster in a greenhouse", "The trapping of the sun's warmth in the atmosphere", "A new type of eco-friendly house"], correctAnswer: "The trapping of the sun's warmth in the atmosphere", points: 2 },
+                { question: "Which of these is a non-point source of pollution?", options: ["A factory drainpipe", "Runoff from a large agricultural area", "A leaking oil tanker", "A sewer outlet"], correctAnswer: "Runoff from a large agricultural area", points: 2 },
+                { question: "The main cause of acid rain?", options: ["Carbon Dioxide", "Sulfur Dioxide & Nitrogen Oxides", "Methane", "Ozone"], correctAnswer: "Sulfur Dioxide & Nitrogen Oxides", points: 2 },
+            ],
+            // More questions can be added for other modules/parts
+        };
+
+        // --- DATA PERSISTENCE HELPERS (using localStorage) ---
+        function saveUsers(users) {
+            localStorage.setItem('ecoChampsUsers', JSON.stringify(users));
+        }
+
+        function saveChallenges(challenges) {
+            localStorage.setItem('ecoChampsChallenges', JSON.stringify(challenges));
+        }
+
+        function loadInitialData() {
+            const savedUsers = localStorage.getItem('ecoChampsUsers');
+            const savedChallenges = localStorage.getItem('ecoChampsChallenges');
+            
+            const defaultUsers = [
+                { id: 'teacher1', name: 'Mr. Sharma', email: 'sharma@eco.com', password: '123', role: 'teacher', subjects: ['Environmental Studies'], profileComplete: true },
+            ];
+            const defaultChallenges = [
+                { id: 1, title: 'Plant a tree and upload proof', description: 'Find a suitable spot, plant a sapling, water it, and upload a picture.', points: 50, submissions: [] },
+                { id: 2, title: 'Segregate waste at home for a week', description: 'Separate your household waste into wet, dry, and hazardous for a full week.', points: 30, submissions: [] },
+            ];
+
+            return {
+                users: savedUsers ? JSON.parse(savedUsers) : defaultUsers,
+                challenges: savedChallenges ? JSON.parse(savedChallenges) : defaultChallenges,
+            };
+        }
+
+        // --- APPLICATION STATE & MOCK DATABASE ---
+        const initialData = loadInitialData();
+        let state = {
+            user: null,
+            users: initialData.users,
+            challenges: initialData.challenges,
+            questionBank: QUIZ_QUESTIONS,
+            modules: [
+                { id: 1, title: 'Chapter 1: Waste Management', level: 1, icon: '🗑️', parts: 5 },
+                { id: 2, title: 'Chapter 2: Water Conservation', level: 2, icon: '💧', parts: 5 },
+                { id: 3, title: 'Chapter 3: Understanding Pollution', level: 3, icon: '💨', parts: 5 },
+            ],
+            currentPage: 'auth', // auth, studentHome, teacherHome, teacherDetails, teacherProfile, segregationGame, etc.
+            currentModuleId: null,
+            currentQuizPart: 1, // Start quiz at part 1
+            // --- Transient state for UI ---
+            authPage: {
+                mode: 'login', // login, register, verify, details
+                role: 'student',
+                error: '',
+                email: '',
+                password: '',
+                otp: '',
+                name: '',
+                age: '',
+                standard: '',
+                registrationData: null,
+                displayedOtp: null,
+            },
+            teacherDashboard: {
+                view: 'overview', // overview, challenges, students
+            }
+        };
+
+        // --- DOM MANIPULATION & RENDERING ---
+        const root = document.getElementById('app-root');
+        let quizTimer = null;
+        let gameTimerInterval = null; // Timer for the segregation game
+
+        function render() {
+            root.innerHTML = ''; // Clear previous content
+            switch (state.currentPage) {
+                case 'auth':
+                    root.innerHTML = renderAuthPage();
+                    break;
+                case 'studentHome':
+                    root.innerHTML = renderStudentHomepage();
+                    break;
+                case 'teacherHome':
+                    root.innerHTML = renderTeacherDashboard();
+                    break;
+                case 'teacherDetails':
+                    root.innerHTML = renderTeacherDetailsPage();
+                    break;
+                case 'teacherProfile':
+                    root.innerHTML = renderTeacherProfilePage();
+                    break;
+                case 'quiz':
+                    renderQuizScreen(); // Quiz has its own internal rendering logic due to timer
+                    break;
+                case 'leaderboard':
+                    root.innerHTML = renderLeaderboardScreen();
+                    break;
+                case 'profile':
+                    root.innerHTML = renderProfilePage();
+                    break;
+                case 'segregationGame':
+                    root.innerHTML = renderSegregationGame();
+                    break;
+                default:
+                    root.innerHTML = renderAuthPage();
+            }
+            // Ensure all navigation listeners are attached after content is rendered
+            attachAllListeners();
+        }
+
+        // --- AUTHENTICATION & DATA LOGIC ---
+        function handleLogin(email, password) {
+            const foundUser = state.users.find(u => u.email === email && u.password === password);
+
+            if (foundUser) {
+                state.user = foundUser;
+                if (foundUser.role === 'teacher') {
+                    state.teacherDashboard.view = 'overview';
+                    if (!foundUser.profileComplete) {
+                        state.currentPage = 'teacherDetails';
+                    } else {
+                        state.currentPage = 'teacherHome';
+                    }
+                } else {
+                    state.currentPage = 'studentHome';
+                }
+                render();
+                return true;
+            }
+            return false;
+        }
+
+
+        function handleStudentSelfRegister(regData, password) {
+            const newUser = {
+                id: `student_${Date.now()}`,
+                name: regData.name,
+                email: regData.email,
+                age: regData.age,
+                standard: regData.standard,
+                password: password,
+                teacherId: 'teacher1', // Automatically assign to the default teacher
+                role: 'student',
+                points: 0,
+                badges: [],
+                profilePicture: null,
+            };
+            state.users.push(newUser);
+            saveUsers(state.users); // Save updated user list
+            state.user = newUser; // Log them in immediately
+            state.currentPage = 'studentHome';
+            render();
+        }
+
+        function handleTeacherDetailsUpdate(name, subjects) {
+            state.users = state.users.map(u => {
+                if (u.id === state.user.id) {
+                    const updatedUser = { ...u, name, subjects: subjects.split(',').map(s => s.trim()), profileComplete: true };
+                    state.user = updatedUser; // Also update current user in state
+                    return updatedUser;
+                }
+                return u;
+            });
+            saveUsers(state.users);
+            state.currentPage = 'teacherHome';
+            render();
+        }
+
+        function handleTeacherPasswordUpdate(newPassword) {
+            state.users = state.users.map(u => {
+                if (u.id === state.user.id) {
+                    const updatedUser = { ...u, password: newPassword };
+                    state.user = updatedUser;
+                    return updatedUser;
+                }
+                return u;
+            });
+            saveUsers(state.users);
+        }
+
+        function handleLogout() {
+            state.user = null;
+            state.currentPage = 'auth';
+            render();
+        }
+        
+        function submitChallenge(challengeId, photoDataUri) {
+            state.challenges = state.challenges.map(c => {
+                if (c.id == challengeId) {
+                    const existingSubmissionIndex = c.submissions.findIndex(s => s.studentId === state.user.id);
+                    let newSubmissions;
+
+                    if (existingSubmissionIndex > -1) {
+                        // Update existing submission for resubmission
+                        newSubmissions = [...c.submissions];
+                        newSubmissions[existingSubmissionIndex] = {
+                            ...newSubmissions[existingSubmissionIndex],
+                            status: 'pending',
+                            photoUrl: photoDataUri,
+                            approvedAt: null // Reset approval date on resubmission
+                        };
+                    } else {
+                        // Add new submission
+                        newSubmissions = [...c.submissions, { studentId: state.user.id, studentName: state.user.name, status: 'pending', photoUrl: photoDataUri, approvedAt: null }];
+                    }
+                    return { ...c, submissions: newSubmissions };
+                }
+                return c;
+            });
+            saveChallenges(state.challenges);
+            render();
+        }
+
+        function approveChallenge(challengeId, studentId, points) {
+            // Find if student was previously approved for this challenge to avoid double points on re-approval
+            const challenge = state.challenges.find(c => c.id == challengeId);
+            const submission = challenge.submissions.find(s => s.studentId === studentId);
+            const wasAlreadyApproved = submission.status === 'approved';
+
+            state.challenges = state.challenges.map(c => {
+                if (c.id == challengeId) {
+                    return { ...c, submissions: c.submissions.map(s => s.studentId === studentId ? { ...s, status: 'approved', approvedAt: Date.now() } : s) };
+                }
+                return c;
+            });
+
+            if (!wasAlreadyApproved) {
+                state.users = state.users.map(u => {
+                    if (u.id === studentId) {
+                        return { ...u, points: (u.points || 0) + points };
+                    }
+                    return u;
+                });
+                if (state.user.id === studentId) {
+                    state.user.points = (state.user.points || 0) + points;
+                }
+            }
+
+            saveUsers(state.users);
+            saveChallenges(state.challenges);
+            render();
+        }
+
+        function rejectChallenge(challengeId, studentId) {
+            state.challenges = state.challenges.map(c => {
+                if (c.id == challengeId) {
+                    return { ...c, submissions: c.submissions.map(s => s.studentId === studentId ? { ...s, status: 'rejected' } : s) };
+                }
+                return c;
+            });
+            saveChallenges(state.challenges);
+            render();
+        }
+
+        function createChallenge(newChallenge) {
+            state.challenges.push({ ...newChallenge, id: Date.now(), submissions: [] });
+            saveChallenges(state.challenges);
+            render();
+        }
+        
+        // --- TEMPLATES (HTML GENERATORS) ---
+        function renderHeader(title) {
+            if (!state.user) return '';
+            const user = state.user;
+            const profilePicSrc = user.profilePicture || `https://placehold.co/40x40/e2e8f0/4a5568?text=${user.name.charAt(0)}`;
+            return `
+                <header class="bg-white p-4 rounded-xl shadow-md flex justify-between items-center mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">${title}</h1>
+                        ${user.role === 'student' ? `<p class="text-gray-600">Points: <span class="font-bold text-green-500">${user.points || 0}</span></p>` : `<p class="text-gray-600">Welcome, ${user.name}!</p>`}
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="font-semibold text-gray-700">${user.name}</span>
+                        ${user.role === 'student' ? `<button data-navigate="profile" class="font-semibold text-gray-600 hover:text-purple-600 text-sm">My Profile</button>` : ''}
+                        <button id="logout-btn" class="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 text-sm font-semibold flex items-center gap-2">
+                            <span>Logout</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        </button>
+                    </div>
+                </header>
+            `;
+        }
+        
+        function renderAuthPage() {
+            const { mode, role, error, displayedOtp, registrationData } = state.authPage;
+            let formHtml = '';
+
+            if (mode === 'login') {
+                formHtml = `
+                    <form id="login-form">
+                        <h2 class="text-3xl font-bold mb-4">${role === 'student' ? 'Student' : 'Teacher'} Log In</h2>
+                         ${role === 'teacher' ? `
+                            <div class="p-2 mb-4 bg-blue-100 border-l-4 border-blue-500 rounded-r-lg">
+                                <p class="text-sm text-blue-800 text-center">
+                                    Use common login: <br>
+                                    <strong>Email:</strong> sharma@eco.com <br>
+                                    <strong>Password:</strong> 123
+                                </p>
+                            </div>
+                        ` : ''}
+                        <div class="space-y-4">
+                            <input type="email" name="email" placeholder="Email Address" class="w-full p-3 border rounded-lg" required/>
+                            <input type="password" name="password" placeholder="Password" class="w-full p-3 border rounded-lg" required/>
+                        </div>
+                        ${error ? `<p class="text-red-500 text-sm mt-2">${error}</p>` : ''}
+                        <button type="submit" class="w-full mt-6 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600">Login</button>
+                        ${role === 'student' ? `<p class="text-center mt-4 text-sm">Don't have an account? <button type="button" data-auth-mode="register" class="font-semibold text-green-600 hover:underline">Sign up now</button></p>` : ''}
+                    </form>
+                `;
+            } else if (mode === 'register') {
+                formHtml = `
+                    <form id="register-form">
+                        <h2 class="text-3xl font-bold mb-4">Create Student Account</h2>
+                        <p class="text-sm text-gray-500 mb-4">Enter your email to get started.</p>
+                        <input type="email" name="email" placeholder="Enter your email" class="w-full p-3 border rounded-lg" required/>
+                        ${error ? `<p class="text-red-500 text-sm mt-2">${error}</p>` : ''}
+                        <button type="submit" class="w-full mt-6 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600">Send OTP</button>
+                        <p class="text-center mt-4 text-sm">Already have an account? <button type="button" data-auth-mode="login" class="font-semibold text-green-600 hover:underline">Log in</button></p>
+                    </form>
+                `;
+            } else if (mode === 'verify') {
+                formHtml = `
+                    <form id="verify-form">
+                        <h2 class="text-3xl font-bold mb-4">Verify OTP</h2>
+                        <p class="text-sm text-gray-500 mb-2">An OTP has been sent to ${registrationData.email}.</p>
+                        ${displayedOtp ? `<div class="p-3 bg-green-100 border-green-300 rounded-lg text-center mb-4"><p class="text-sm text-green-800">For demo, your OTP is: <span class="font-bold tracking-widest">${displayedOtp}</span></p></div>` : ''}
+                        <input type="text" name="otp" placeholder="Enter 4-digit OTP" class="w-full p-3 border rounded-lg tracking-widest text-center" required/>
+                        ${error ? `<p class="text-red-500 text-sm mt-2">${error}</p>` : ''}
+                        <button type="submit" class="w-full mt-6 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600">Verify</button>
+                        <p class="text-center mt-4 text-sm"><button type="button" data-auth-mode="register" class="font-semibold text-gray-500 hover:underline">Back to email</button></p>
+                    </form>
+                `;
+            } else if (mode === 'details') {
+                formHtml = `
+                    <form id="details-form">
+                        <h2 class="text-3xl font-bold mb-4">Complete Your Profile</h2>
+                        <div class="space-y-3">
+                            <input type="text" name="name" placeholder="Full Name" class="w-full p-3 border rounded-lg" required/>
+                            <input type="number" name="age" placeholder="Age" class="w-full p-3 border rounded-lg" required/>
+                            <input type="text" name="standard" placeholder="Class (e.g., 8th)" class="w-full p-3 border rounded-lg" required/>
+                            <input type="password" name="password" placeholder="Set a Password" class="w-full p-3 border rounded-lg" required/>
+                        </div>
+                        ${error ? `<p class="text-red-500 text-sm mt-2">${error}</p>` : ''}
+                        <button type="submit" class="w-full mt-6 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600">Create Account</button>
+                    </form>
+                `;
+            }
+
+            return `
+                <div class="flex items-center justify-center min-h-screen -m-4">
+                    <div class="w-full max-w-4xl flex bg-white rounded-2xl shadow-2xl overflow-hidden">
+                        <div class="hidden md:flex w-1/2 bg-green-50 p-8 flex-col justify-center items-center text-center">
+                            <h1 class="text-4xl font-bold mb-4 text-green-800">EcoChamps</h1>
+                            <p class="text-green-700 mb-8">Learn, act, and make a difference.</p>
+                            <div class="text-8xl flex gap-8"><span role="img" aria-label="tree">🌳</span><span role="img" aria-label="student">🧑‍🎓</span><span role="img" aria-label="earth">🌍</span></div>
+                        </div>
+                        <div class="w-full md:w-1/2 p-8 flex flex-col justify-center">
+                            <div class="mb-6">
+                                <div class="flex rounded-lg bg-gray-200 p-1">
+                                    <button data-role="student" class="role-btn w-1/2 py-2 rounded-md font-semibold transition ${role === 'student' ? 'bg-white shadow' : 'text-gray-500'}">Student</button>
+                                    <button data-role="teacher" class="role-btn w-1/2 py-2 rounded-md font-semibold transition ${role === 'teacher' ? 'bg-white shadow' : 'text-gray-500'}">Teacher</button>
+                                </div>
+                            </div>
+                            ${formHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStudentHomepage() {
+            const { user, challenges, modules } = state;
+            const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
+
+            const getChallengeAction = (challenge) => {
+                const submission = challenge.submissions.find(s => s.studentId === user.id);
+                if (!submission) {
+                    return `<button data-challenge-id="${challenge.id}" class="upload-btn bg-blue-500 text-white px-3 py-1 text-sm rounded-md hover:bg-blue-600 whitespace-nowrap">Upload Proof</button>`;
+                }
+
+                switch (submission.status) {
+                    case 'pending':
+                        return `<span class="font-semibold text-sm whitespace-nowrap px-2 py-1 rounded-full bg-yellow-200 text-yellow-800">Pending</span>`;
+                    case 'approved':
+                        const timeSinceApproval = Date.now() - submission.approvedAt;
+                        if (timeSinceApproval < ONE_WEEK_IN_MS) {
+                            const daysLeft = Math.ceil((ONE_WEEK_IN_MS - timeSinceApproval) / (1000 * 60 * 60 * 24));
+                            return `<div class="text-center"><span class="font-semibold text-sm whitespace-nowrap px-2 py-1 rounded-full bg-green-200 text-green-800">Completed</span><p class="text-xs text-gray-500 mt-1">Retry in ${daysLeft}d</p></div>`;
+                        } else {
+                            return `<button data-challenge-id="${challenge.id}" class="upload-btn bg-blue-500 text-white px-3 py-1 text-sm rounded-md hover:bg-blue-600 whitespace-nowrap">Do It Again</button>`;
+                        }
+                    case 'rejected':
+                        return `<button data-challenge-id="${challenge.id}" class="upload-btn bg-orange-500 text-white px-3 py-1 text-sm rounded-md hover:bg-orange-600 whitespace-nowrap">Upload Again</button>`;
+                    default:
+                        return '';
+                }
+            };
+            
+            return `
+                <div>
+                    ${renderHeader('Student Dashboard')}
+                    <main class="space-y-8">
+                        <div class="bg-white p-6 rounded-xl shadow-md">
+                            <div class="flex justify-between items-center mb-4">
+                                <h2 class="text-2xl font-bold text-blue-700">Learning Modules</h2>
+                                <button data-navigate="leaderboard" class="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.644 2.14a1 1 0 00-1.288 0l-4.25 3.5a1 1 0 00-.23 1.076 1 1 0 00.914.634h8.5a1 1 0 00.914-.634 1 1 0 00-.23-1.076l-4.25-3.5zM4 10a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM5 14a1 1 0 100 2h10a1 1 0 100-2H5z" clip-rule="evenodd" /></svg>
+                                    <span>Leaderboard</span>
+                                </button>
+                            </div>
+                            <p class="mt-2 text-gray-600">Complete quizzes to earn points and test your knowledge!</p>
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                ${modules.map(m => {
+                                    const nextPartToTake = (user.quizProgress?.[m.id] || 0) + 1;
+                                    const allPartsCompleted = nextPartToTake > m.parts;
+                                    const buttonText = allPartsCompleted ? 'Completed' : `Start Part ${nextPartToTake}`;
+                                    const buttonColor = allPartsCompleted ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600';
+                                    const isDisabled = allPartsCompleted ? 'disabled' : '';
+
+                                    return `
+                                        <div class="p-4 border rounded-lg bg-gray-50 text-center">
+                                            <span class="text-4xl">${m.icon}</span>
+                                            <p class="font-bold mt-2">${m.title}</p>
+                                            <p class="text-sm text-blue-500">Level ${m.level}</p>
+                                            <button data-module-id="${m.id}" data-quiz-part="${nextPartToTake}" class="start-quiz-btn w-full mt-3 text-white py-2 rounded-lg font-bold transition ${buttonColor} ${isDisabled}">
+                                                ${buttonText}
+                                            </button>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-xl shadow-md">
+                            <h2 class="text-2xl font-bold text-purple-700">Gamified Challenges</h2>
+                            <p class="mt-2 text-gray-600">Play games to test your knowledge and earn bonus points!</p>
+                            <div class="mt-4">
+                                <div data-navigate="segregationGame" class="game-card flex items-center gap-4 p-4 border rounded-lg bg-gray-50 hover:bg-purple-100 cursor-pointer transition">
+                                    <span class="text-4xl">♻️</span>
+                                    <div>
+                                        <p class="font-bold text-lg">Waste Segregation Game</p>
+                                        <p class="text-sm text-purple-500">Drag and drop waste into the correct bins before time runs out!</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-xl shadow-md">
+                            <h2 class="text-2xl font-bold text-green-700">Active Challenges</h2>
+                            <p class="mt-2 text-gray-600">Complete these real-world tasks and upload proof.</p>
+                            <div class="mt-4 space-y-3">
+                                ${challenges.map(c => `
+                                    <div class="p-4 border rounded-lg bg-gray-50 flex justify-between items-center">
+                                        <div>
+                                            <p class="font-bold">${c.title} - <span class="font-bold text-green-500">${c.points} Points</span></p>
+                                            <p class="text-sm text-gray-500 mt-1">${c.description}</p>
+                                        </div>
+                                        ${getChallengeAction(c)}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </main>
+                    <div id="upload-modal-container"></div>
+                </div>
+            `;
+        }
+        
+        function renderUploadModal(challengeId) {
+            return `
+                <div id="upload-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white p-6 rounded-lg shadow-xl text-center w-full max-w-md">
+                        <h3 class="text-xl font-bold mb-4">Upload Your Photo Proof</h3>
+                        <div class="p-4 border-2 border-dashed rounded-lg bg-gray-50 mb-4">
+                            <input type="file" id="file-input" accept="image/*" class="text-sm"/>
+                            <img id="image-preview" src="" alt="Preview" class="hidden mt-4 max-h-48 mx-auto rounded-lg"/>
+                        </div>
+                        <button id="submit-upload-btn" data-challenge-id="${challengeId}" disabled class="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 disabled:bg-gray-400">Submit Photo</button>
+                        <button id="cancel-upload-btn" class="ml-4 text-gray-500">Cancel</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderTeacherDashboard() {
+            const { view } = state.teacherDashboard;
+            let content = '';
+
+            if (view === 'overview') content = renderTeacherOverview();
+            else if (view === 'students') content = renderStudentDatabase();
+            else if (view === 'challenges') content = renderManageChallenges();
+            
+            const navLinkClasses = (v) => `teacher-view-btn flex items-center gap-3 px-4 py-2 rounded-lg transition ${view === v ? 'bg-blue-500 text-white' : 'hover:bg-gray-200'}`;
+
+            return `
+                <div class="flex flex-col md:flex-row gap-6">
+                    <aside class="md:w-1/4">
+                        <div class="bg-white p-4 rounded-xl shadow-md">
+                            <h2 class="text-xl font-bold mb-4">EcoChamps Teacher</h2>
+                            <nav class="flex flex-col space-y-2">
+                                <button data-view="overview" class="${navLinkClasses('overview')}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                                    <span>Overview</span>
+                                </button>
+                                <button data-view="challenges" class="${navLinkClasses('challenges')}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.78 4.22a.75.75 0 010 1.06L2.56 6.5h14.88l-1.22-1.22a.75.75 0 011.06-1.06l2.5 2.5a.75.75 0 010 1.06l-2.5 2.5a.75.75 0 11-1.06-1.06L17.44 8H2.56l1.22 1.22a.75.75 0 11-1.06 1.06l-2.5-2.5a.75.75 0 010-1.06l2.5-2.5a.75.75 0 011.06 0zM16.22 15.78a.75.75 0 010-1.06L17.44 13.5H2.56l1.22 1.22a.75.75 0 11-1.06 1.06l-2.5-2.5a.75.75 0 010-1.06l2.5-2.5a.75.75 0 011.06 1.06L2.56 12h14.88l-1.22-1.22a.75.75 0 011.06-1.06l2.5 2.5a.75.75 0 010 1.06l-2.5 2.5a.75.75 0 01-1.06 0z" clip-rule="evenodd" /></svg>
+                                    <span>Challenges</span>
+                                </button>
+                                <button data-view="students" class="${navLinkClasses('students')}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0110 13v-2.26a3.001 3.001 0 00-1.26-2.516 3.001 3.001 0 00-4.48 0A3.001 3.001 0 003 10.74V13a5 5 0 01-1.43 3.67A6.97 6.97 0 000 16a1 1 0 102 0 5 5 0 019.22-2.73A5.001 5.001 0 0118 16a1 1 0 102 0c0-.34-.024-.673-.07-1z" /></svg>
+                                    <span>My Students</span>
+                                </button>
+                                <button data-navigate="leaderboard" class="${navLinkClasses('')}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.644 2.14a1 1 0 00-1.288 0l-4.25 3.5a1 1 0 00-.23 1.076 1 1 0 00.914.634h8.5a1 1 0 00.914-.634 1 1 0 00-.23-1.076l-4.25-3.5zM4 10a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM5 14a1 1 0 100 2h10a1 1 0 100-2H5z" clip-rule="evenodd" /></svg>
+                                    <span>Leaderboard</span>
+                                </button>
+                                <button data-navigate="teacherProfile" class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.98 5.98 0 0010 16a5.979 5.979 0 004.546-2.916A5 5 0 0010 11z" clip-rule="evenodd" /></svg>
+                                    <span>My Profile</span>
+                                </button>
+                                <button id="logout-btn" class="flex items-center gap-3 px-4 py-2 mt-4 text-red-600 hover:bg-red-100 rounded-lg transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                                    <span>Logout</span>
+                                </button>
+                            </nav>
+                        </div>
+                    </aside>
+                    <main class="md:w-3/4">
+                        ${content}
+                        <div id="photo-viewer-modal-container"></div>
+                    </main>
+                </div>
+            `;
+        }
+
+        function renderTeacherOverview() {
+            const myStudents = state.users.filter(u => u.teacherId === state.user.id && u.role === 'student');
+            const topPerformer = myStudents.length > 0 ? myStudents.sort((a,b) => (b.points || 0) - (a.points || 0))[0] : null;
+            const pendingSubmissions = state.challenges.flatMap(c => c.submissions).filter(s => s.status === 'pending');
+            const teacher = state.user;
+
+            const StatCard = ({icon, title, value, color}) => `
+                <div class="bg-white p-6 rounded-xl shadow-md flex items-center gap-4">
+                    <div class="p-3 rounded-full ${color}">
+                        ${icon}
+                    </div>
+                    <div>
+                        <p class="text-gray-500">${title}</p>
+                        <p class="text-2xl font-bold">${value}</p>
+                    </div>
+                </div>
+            `;
+            
+            return `
+                <h1 class="text-3xl font-bold mb-6">Dashboard Overview</h1>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    ${StatCard({
+                        icon: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`,
+                        title: "Total Students", value: myStudents.length, color: "bg-blue-500"
+                    })}
+                    ${StatCard({
+                        icon: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>`,
+                        title: "Pending Approvals", value: pendingSubmissions.length, color: "bg-yellow-500"
+                    })}
+                    ${StatCard({
+                        icon: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>`,
+                        title: "Top Score", value: topPerformer ? (topPerformer.points || 0) : 0, color: "bg-green-500"
+                    })}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <h3 class="text-xl font-bold mb-4">Teacher Profile</h3>
+                        <div class="space-y-2">
+                            <p><strong>Name:</strong> ${teacher.name}</p>
+                            <p><strong>Subjects:</strong> ${teacher.subjects && teacher.subjects.length > 0 ? teacher.subjects.join(', ') : 'Not set'}</p>
+                            <p><strong>Approvals Pending:</strong> ${pendingSubmissions.length}</p>
+                            <p><strong>Student Count:</strong> ${myStudents.length}</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                            <h3 class="text-xl font-bold mb-4">Recent Submissions</h3>
+                          ${pendingSubmissions.length > 0 ? pendingSubmissions.slice(0, 3).map(s => {
+                            const challenge = state.challenges.find(c => c.submissions.includes(s));
+                            return `
+                                <div class="flex justify-between items-center p-2 rounded-lg hover:bg-gray-50">
+                                    <p>${s.studentName} <span class="text-gray-500">submitted for</span> "${challenge.title}"</p>
+                                    <button data-view="challenges" class="teacher-view-btn text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-md hover:bg-blue-200">Review</button>
+                                </div>
+                             `
+                        }).join('') : '<p class="text-gray-500">No pending submissions.</p>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStudentDatabase() {
+            const myStudents = state.users.filter(s => s.teacherId === state.user.id && s.role === 'student');
+            return `
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <h3 class="text-2xl font-bold mb-4">My Student Roster</h3>
+                        <p class="text-sm text-gray-600 mb-4">Students who register will automatically appear here.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="border-b bg-gray-50"><tr>
+                                    <th class="p-3">Name</th><th class="p-3">Email</th><th class="p-3">Class</th>
+                                    <th class="p-3 text-right">Points</th>
+                                </tr></thead>
+                                <tbody>
+                                ${myStudents.length > 0 ? myStudents.sort((a,b) => (b.points || 0) - (a.points || 0)).map(s => `
+                                    <tr class="border-b hover:bg-gray-50">
+                                        <td class="p-3 font-semibold">${s.name}</td>
+                                        <td class="p-3 text-sm text-gray-600">${s.email}</td>
+                                        <td class="p-3">${s.standard}</td>
+                                        <td class="p-3 font-bold text-green-600 text-right">${s.points || 0}</td>
+                                    </tr>
+                                `).join('') : `<tr><td colspan="4" class="text-center p-4 text-gray-500">No students have registered yet.</td></tr>`}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+            `;
+        }
+        
+        function renderManageChallenges() {
+            return `
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-2xl font-bold">Manage Challenges</h3>
+                        <button id="show-create-challenge-form" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                            <span>Create New</span>
+                        </button>
+                    </div>
+                    <div id="create-challenge-form-container" class="hidden">
+                        <form id="create-challenge-form" class="p-4 border rounded-lg mb-6 bg-gray-50 space-y-3">
+                            <h4 class="text-lg font-bold">New Challenge</h4>
+                            <input type="text" name="title" placeholder="Title" class="w-full p-2 border rounded" required />
+                            <textarea name="description" placeholder="Description" class="w-full p-2 border rounded" required ></textarea>
+                            <input type="number" name="points" placeholder="Points" class="w-full p-2 border rounded" required />
+                            <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Add Challenge</button>
+                        </form>
+                    </div>
+                    <div class="space-y-4">
+                    ${state.challenges.map(c => `
+                        <div class="border p-4 rounded-lg">
+                            <h4 class="font-bold text-lg">${c.title} (${c.points} pts)</h4>
+                            <div class="mt-2 space-y-2 pl-4 border-l-2">
+                            ${c.submissions.length > 0 ? c.submissions.map(s => `
+                                <div class="flex justify-between items-center p-2 hover:bg-gray-50 rounded-md">
+                                    <p>${s.studentName}</p>
+                                    ${s.status === 'pending' ? `
+                                        <div class="flex gap-2 items-center">
+                                            <button data-photo-url="${s.photoUrl}" class="view-proof-btn text-sm text-blue-600 hover:underline">View Proof</button>
+                                            <button data-challenge-id="${c.id}" data-student-id="${s.studentId}" data-points="${c.points}" class="approve-btn bg-green-500 text-white px-2 py-1 text-xs rounded-md">Approve</button>
+                                            <button data-challenge-id="${c.id}" data-student-id="${s.studentId}" class="reject-btn bg-red-500 text-white px-2 py-1 text-xs rounded-md">Reject</button>
+                                        </div>` 
+                                    : `<span class="font-semibold text-sm ${s.status === 'approved' ? 'text-green-600' : s.status === 'rejected' ? 'text-orange-600' : ''}">${s.status.charAt(0).toUpperCase() + s.status.slice(1)}</span>`}
+                                </div>`).join('') 
+                            : '<p class="text-gray-500 text-sm">No submissions.</p>'}
+                            </div>
+                        </div>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderQuizScreen() {
+            const { questionBank, currentModuleId, currentQuizPart } = state;
+            const quizQuestions = questionBank[currentQuizPart];
+            let currentQuestionIndex = 0;
+            let score = 0;
+            let timeLeft = 60;
+            const totalParts = state.modules.find(m => m.id === currentModuleId).parts;
+
+            function updateQuizUI() {
+                if (currentQuestionIndex >= quizQuestions.length || timeLeft <= 0) {
+                    clearInterval(quizTimer);
+                    
+                    if (state.user) {
+                        state.user.points = (state.user.points || 0) + score;
+                        // Update quiz progress
+                        if (!state.user.quizProgress) state.user.quizProgress = {};
+                        if (!state.user.quizProgress[currentModuleId] || state.user.quizProgress[currentModuleId] < currentQuizPart) {
+                            state.user.quizProgress[currentModuleId] = currentQuizPart;
+                        }
+                        
+                        state.users = state.users.map(u => u.id === state.user.id ? state.user : u);
+                        saveUsers(state.users);
+                    }
+                    
+                    const isLastPart = currentQuizPart >= totalParts;
+                    
+                    root.innerHTML = `
+                        <div class="text-center p-8 bg-white rounded-2xl shadow-lg flex flex-col items-center">
+                            <h2 class="text-3xl font-bold mb-4">${timeLeft <= 0 ? "Time's Up!" : "Quiz Part Complete!"}</h2>
+                            <p class="text-xl text-gray-600 mb-6">You earned <span class="font-bold text-green-500">${score}</span> points!</p>
+                            <div class="flex space-x-4">
+                                <button data-navigate="leaderboard" class="bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg">🏆 View Leaderboard</button>
+                                ${!isLastPart && timeLeft > 0 ? `
+                                    <button data-navigate="quiz" data-module-id="${currentModuleId}" data-quiz-part="${currentQuizPart + 1}" class="start-quiz-btn bg-green-500 text-white font-bold py-3 px-6 rounded-lg">Next Part</button>
+                                ` : ''}
+                                <button data-navigate="studentHome" class="bg-blue-500 text-white font-bold py-3 px-6 rounded-lg">🏠 Back to Home</button>
+                            </div>
+                        </div>`;
+                    attachAllListeners(); // Attach listeners for the end screen buttons
+                    return;
+                }
+
+                const currentQuestion = quizQuestions[currentQuestionIndex];
+                const progress = ((currentQuestionIndex + 1) / quizQuestions.length) * 100;
+                const module = state.modules.find(m => m.id === currentModuleId);
+
+                root.innerHTML = `
+                    <div class="p-6 bg-white rounded-2xl shadow-lg relative flex flex-col h-full">
+                        <div class="mb-6">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-semibold text-red-500">Time Left: ${timeLeft}s</span>
+                                <span class="text-sm font-bold text-green-500">Score: ${score} points</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-green-500 h-2.5 rounded-full" style="width: ${progress}%"></div>
+                            </div>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-6 text-center">(${currentQuestionIndex + 1}/${quizQuestions.length}) ${currentQuestion.question}</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${currentQuestion.options.map(option => `<button class="answer-btn p-4 text-left font-semibold border-2 rounded-lg transition-all bg-white hover:bg-gray-100">${option}</button>`).join('')}
+                        </div>
+                        <div class="mt-8 flex justify-center">
+                            <button data-navigate="studentHome" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-semibold">&larr; Quit Quiz</button>
+                        </div>
+                    </div>`;
+                
+                attachAllListeners(); // Attach listeners for quiz buttons
+
+                document.querySelectorAll('.answer-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const isCorrect = btn.textContent === currentQuestion.correctAnswer;
+                        if (isCorrect) {
+                            score += currentQuestion.points;
+                        }
+                        
+                        document.querySelectorAll('.answer-btn').forEach(b => {
+                            b.disabled = true;
+                            if (b.textContent === currentQuestion.correctAnswer) b.classList.add('bg-green-200', 'border-green-500');
+                            else if (b.textContent === btn.textContent) b.classList.add('bg-red-200', 'border-red-500');
+                        });
+                        
+                        setTimeout(() => {
+                            currentQuestionIndex++;
+                            updateQuizUI();
+                        }, 1200);
+                    });
+                });
+            }
+
+            quizTimer = setInterval(() => {
+                timeLeft--;
+                // Check if the element exists before trying to update it
+                const timerEl = document.getElementById('game-timer');
+                if(timerEl) {
+                    timerEl.textContent = `Time: ${timeLeft}s`;
+                    if (timeLeft <= 0) {
+                       updateQuizUI();
+                    }
+                } else {
+                    clearInterval(quizTimer);
+                }
+            }, 1000);
+
+            updateQuizUI();
+        }
+
+        function renderLeaderboardScreen() {
+             const leaderboardData = state.users.filter(u => u.role === 'student').sort((a,b) => (b.points || 0) - (a.points || 0));
+             const getRankColor = (index) => {
+                 if(index === 0) return 'text-yellow-400'; if(index === 1) return 'text-gray-400'; if(index === 2) return 'text-yellow-600'; return 'text-gray-500';
+             };
+             const getRankIcon = (index) => index < 3 ? ['🥇','🥈','🥉'][index] : `#${index + 1}`;
+             
+             return `
+                 <div class="p-6 bg-white rounded-2xl shadow-lg">
+                     <h1 class="text-4xl font-bold text-center mb-6">Leaderboard</h1>
+                     <div class="space-y-3">
+                     ${leaderboardData.map((player, index) => `
+                         <div class="flex items-center p-4 rounded-lg ${state.user && player.id === state.user.id ? 'bg-green-100 border-2 border-green-400' : 'bg-gray-50'}">
+                             <div class="text-2xl font-bold w-12 ${getRankIcon(index)}">${getRankIcon(index)}</div>
+                             <div class="flex-grow"><p class="font-bold text-lg">${player.name}</p></div>
+                             <div class="font-bold text-xl text-green-600">${player.points || 0} pts</div>
+                         </div>`).join('')}
+                     </div>
+                      <button data-navigate="${state.user.role === 'student' ? 'studentHome' : 'teacherHome'}" class="mt-8 w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg">🏠 Back to Home</button>
+                 </div>
+             `;
+        }
+
+        function renderProfilePage() {
+            const user = state.user;
+            const profilePicSrc = user.profilePicture || 'https://placehold.co/128x128/e2e8f0/4a5568?text=Avatar';
+            return `
+                <div>
+                    ${renderHeader('My Profile')}
+                     <div class="mb-4">
+                        <button data-navigate="studentHome" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 flex items-center gap-2">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path></svg>
+                            <span>Back to Home</span>
+                        </button>
+                    </div>
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div class="md:col-span-1 p-6 bg-white rounded-xl shadow-md text-center">
+                            <img src="${profilePicSrc}" id="profile-pic-preview" alt="Profile Picture" class="w-32 h-32 rounded-full mx-auto mb-4 object-cover border-4 border-gray-200">
+                            <input type="file" id="profile-pic-input" class="hidden" accept="image/*">
+                            <button id="change-pic-btn" class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm font-semibold">Change Picture</button>
+                            <h2 class="text-2xl font-bold mt-4">${user.name}</h2>
+                            <p class="text-gray-500">${user.standard}</p>
+                            <p class="text-2xl mt-4">Total Points: <span class="font-bold text-green-600">${user.points || 0}</span></p>
+                        </div>
+                        <div class="md:col-span-2 p-6 bg-white rounded-xl shadow-md">
+                             <h3 class="text-xl font-bold mb-4 border-b pb-2">My Badges</h3>
+                            <div class="flex flex-wrap gap-4 mb-6">
+                                ${user.badges.length > 0 ? user.badges.map(badgeKey => {
+                                    const badge = BADGE_DEFINITIONS[badgeKey];
+                                    return badge ? `
+                                        <div class="badge-container relative flex flex-col items-center text-center">
+                                            <span class="text-5xl">${badge.icon}</span>
+                                            <p class="text-sm font-semibold">${badge.name}</p>
+                                            <div class="badge-tooltip absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-xs rounded py-1 px-2 text-center z-10">
+                                                ${badge.description}
+                                            </div>
+                                        </div>
+                                    ` : '';
+                                }).join('') : '<p class="text-gray-500">No badges earned yet. Play the segregation game to earn some!</p>'}
+                            </div>
+
+                            <h3 class="text-xl font-bold mb-4 border-b pb-2">Account Settings</h3>
+                            <form id="change-password-form">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Change Password</label>
+                                <div class="space-y-3">
+                                    <input type="password" name="newPassword" placeholder="New Password" class="w-full p-3 border rounded-lg" required>
+                                    <input type="password" name="confirmPassword" placeholder="Confirm New Password" class="w-full p-3 border rounded-lg" required>
+                                </div>
+                                <button type="submit" class="mt-4 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 font-semibold">Update Password</button>
+                                <div id="password-feedback" class="mt-2 text-sm"></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>`;
+        }
+        
+        function renderTeacherDetailsPage() {
+            const user = state.user;
+            return `
+                <div class="flex items-center justify-center min-h-screen -m-4">
+                    <div class="w-full max-w-lg p-8 bg-white rounded-2xl shadow-2xl">
+                        <h2 class="text-3xl font-bold mb-4">Complete Your Teacher Profile</h2>
+                        <p class="text-gray-600 mb-6">Please provide some additional details to set up your account.</p>
+                        <form id="teacher-details-form">
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="teacher-name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                                    <input type="text" id="teacher-name" name="name" value="${user.name}" class="w-full mt-1 p-3 border rounded-lg" required/>
+                                </div>
+                                <div>
+                                    <label for="teacher-subjects" class="block text-sm font-medium text-gray-700">Subjects (comma-separated)</label>
+                                    <input type="text" id="teacher-subjects" name="subjects" placeholder="e.g., Science, Environmental Studies" class="w-full mt-1 p-3 border rounded-lg" required/>
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full mt-6 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600">Save and Continue</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTeacherProfilePage() {
+            const user = state.user;
+            return `
+                <div>
+                    ${renderHeader('Teacher Profile')}
+                    <div class="bg-white p-6 rounded-xl shadow-md space-y-6">
+                        <h2 class="text-2xl font-bold">Account Settings</h2>
+                        
+                        <h3 class="text-xl font-bold mt-4 mb-2">Edit Details</h3>
+                        <form id="edit-teacher-details-form">
+                            <div class="space-y-3">
+                                <div>
+                                    <label for="edit-teacher-name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                                    <input type="text" id="edit-teacher-name" name="name" value="${user.name}" class="w-full mt-1 p-3 border rounded-lg" required/>
+                                </div>
+                                <div>
+                                    <label for="edit-teacher-subjects" class="block text-sm font-medium text-gray-700">Subjects (comma-separated)</label>
+                                    <input type="text" id="edit-teacher-subjects" name="subjects" value="${user.subjects.join(', ')}" class="w-full mt-1 p-3 border rounded-lg" required/>
+                                </div>
+                            </div>
+                            <button type="submit" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 font-semibold">Update Details</button>
+                        </form>
+                        <div id="edit-details-feedback" class="mt-2 text-sm"></div>
+
+                        <h3 class="text-xl font-bold mt-4 mb-2">Change Password</h3>
+                        <form id="change-password-form">
+                            <div class="space-y-3">
+                                <input type="password" name="newPassword" placeholder="New Password" class="w-full p-3 border rounded-lg" required>
+                                <input type="password" name="confirmPassword" placeholder="Confirm New Password" class="w-full p-3 border rounded-lg" required>
+                            </div>
+                            <button type="submit" class="mt-4 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 font-semibold">Update Password</button>
+                            <div id="password-feedback" class="mt-2 text-sm"></div>
+                        </form>
+                    </div>
+                    <div class="mt-6">
+                        <button data-navigate="teacherHome" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 flex items-center gap-2">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path></svg>
+                            <span>Back to Dashboard</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+
+        function renderSegregationGame() {
+            const LEVELS_DATA = {
+                1: { title: "Easy 1", desc: "Sort 8 items in 45s.", color: "green" },
+                2: { title: "Easy 2", desc: "Sort 10 items in 50s.", color: "green" },
+                3: { title: "Medium 1", desc: "Sort 12 items in 45s.", color: "blue" },
+                4: { title: "Medium 2", desc: "Sort 15 items in 50s.", color: "blue" },
+                5: { title: "Hard 1", desc: "Sort 18 items in 45s.", color: "red" },
+                6: { title: "Hard 2", desc: "Sort 20 items in 45s.", color: "red" }
+            };
+
+            return `
+                <div>
+                    ${renderHeader('Waste Segregation Challenge')}
+                    <div id="game-container" class="bg-white p-6 rounded-xl shadow-lg relative">
+                        <div id="game-level-selection">
+                            <h2 class="text-3xl font-bold text-center">Select a Level</h2>
+                            <p class="text-center text-gray-600 mt-4 mb-6">Sort all the items into 'Wet Waste' or 'Dry Waste' before the timer runs out!</p>
+                            <div class="grid md:grid-cols-3 gap-6">
+                                ${Object.entries(LEVELS_DATA).map(([level, data]) => `
+                                    <div class="level-card-container text-center p-6 bg-${data.color}-50 rounded-lg border-2 border-${data.color}-200">
+                                        <h3 class="text-2xl font-bold text-${data.color}-700">Level ${level}</h3>
+                                        <p class="text-${data.color}-600 my-2">${data.title}</p>
+                                        <p class="text-sm text-gray-500 mb-3">${data.desc}</p>
+                                        <button data-level="${level}" class="start-game-btn w-full bg-${data.color}-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-${data.color}-600">Play</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="mt-8 text-center">
+                                <button data-navigate="studentHome" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-semibold">&larr; Back to Home</button>
+                            </div>
+                        </div>
+
+                        <div id="game-play-screen" class="hidden">
+                            <div class="flex justify-between items-center mb-4 p-2 bg-gray-100 rounded-lg">
+                                <div id="game-score-display" class="text-xl font-bold text-green-600">Score: 0</div>
+                                <div id="game-level-display" class="text-xl font-bold">Level 1</div>
+                                <div id="game-timer" class="text-xl font-bold text-red-500">Time: 60s</div>
+                            </div>
+                            <div id="waste-items-area" class="flex flex-wrap justify-center items-center gap-4 p-4 mb-6 min-h-[100px] bg-gray-100 rounded-lg">
+                                <!-- Waste items will be generated here by JS -->
+                            </div>
+                            <div id="bins-area" class="grid grid-cols-2 gap-4">
+                                <!-- Bins will be generated here by JS -->
+                            </div>
+                            <div id="game-feedback" class="text-center font-bold mt-4 text-2xl h-8"></div>
+                            <div class="mt-8 flex justify-center gap-4">
+                                <button data-navigate="studentHome" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold">&larr; Quit Game</button>
+                                <button data-navigate="segregationGame" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-semibold">Back to Levels</button>
+                            </div>
+                        </div>
+
+                        <div id="game-end-screen" class="hidden text-center">
+                            <h2 id="end-screen-title" class="text-3xl font-bold">Challenge Complete!</h2>
+                            <p class="text-xl text-gray-600 my-4">You earned <span id="game-score" class="font-bold text-green-500"></span> points!</p>
+                            <div id="badge-earned-display" class="my-6 hidden">
+                                <h3 class="text-2xl font-bold">New Badge Unlocked!</h3>
+                                <div id="badge-info" class="flex flex-col items-center mt-2"></div>
+                            </div>
+                            <div class="flex justify-center gap-4">
+                                <button data-navigate="segregationGame" class="bg-purple-500 text-white font-bold py-3 px-6 rounded-lg">Play Again</button>
+                                <button data-navigate="studentHome" class="bg-blue-500 text-white font-bold py-3 px-6 rounded-lg">🏠 Back to Home</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // --- EVENT LISTENER ATTACHMENT ---
+        function attachAllListeners() {
+            // General Navigation Listeners
+            document.querySelectorAll('[data-navigate]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.currentPage = btn.dataset.navigate;
+                    if (btn.dataset.quizPart) {
+                        state.currentQuizPart = parseInt(btn.dataset.quizPart, 10);
+                    }
+                    if (gameTimerInterval) {
+                        clearInterval(gameTimerInterval);
+                        gameTimerInterval = null;
+                    }
+                    if(quizTimer) clearInterval(quizTimer);
+                    render();
+                });
+            });
+
+            // Logout Button
+            const logoutBtn = document.getElementById('logout-btn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', handleLogout);
+            }
+
+            // Page-specific listeners
+            switch(state.currentPage) {
+                case 'auth':
+                    attachAuthListeners();
+                    break;
+                case 'studentHome':
+                    attachStudentHomeListeners();
+                    break;
+                case 'teacherHome':
+                    attachTeacherDashboardListeners();
+                    break;
+                case 'teacherDetails':
+                    attachTeacherDetailsListeners();
+                    break;
+                case 'teacherProfile':
+                    attachTeacherProfileListeners();
+                    break;
+                case 'leaderboard':
+                    // Handled by general navigation listeners
+                    break;
+                case 'profile':
+                    attachProfilePageListeners();
+                    break;
+                case 'segregationGame':
+                    attachSegregationGameListeners();
+                    break;
+            }
+        }
+
+        function attachAuthListeners() {
+            document.querySelectorAll('.role-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.authPage.role = btn.dataset.role;
+                    state.authPage.mode = 'login';
+                    state.authPage.error = '';
+                    render();
+                });
+            });
+
+            document.querySelectorAll('[data-auth-mode]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.authPage.mode = btn.dataset.authMode;
+                    state.authPage.error = '';
+                    state.authPage.displayedOtp = null;
+                    render();
+                });
+            });
+
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const email = e.target.email.value;
+                    const password = e.target.password.value;
+
+                    if (!handleLogin(email, password)) {
+                        state.authPage.error = 'Invalid credentials. Please try again.';
+                        render();
+                    }
+                });
+            }
+            
+            const registerForm = document.getElementById('register-form');
+            if (registerForm) {
+                registerForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const email = e.target.email.value;
+                    const studentExists = state.users.some(u => u.email === email);
+
+                    if (studentExists) {
+                        state.authPage.error = "This email is already registered.";
+                    } else {
+                        const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+                        console.log(`[EcoChamps] OTP for ${email}: ${generatedOtp}`);
+                        state.authPage.displayedOtp = generatedOtp;
+                        state.authPage.registrationData = { email, role: 'student', otp: generatedOtp };
+                        state.authPage.mode = 'verify';
+                    }
+                    render();
+                });
+            }
+
+            const verifyForm = document.getElementById('verify-form');
+             if (verifyForm) {
+                verifyForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const otp = e.target.otp.value;
+                    if (otp === state.authPage.registrationData.otp) {
+                        state.authPage.mode = 'details';
+                        state.authPage.displayedOtp = null;
+                    } else {
+                        state.authPage.error = 'Invalid OTP. Please try again.';
+                    }
+                    render();
+                });
+            }
+
+            const detailsForm = document.getElementById('details-form');
+            if (detailsForm) {
+                detailsForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const name = e.target.name.value;
+                    const age = e.target.age.value;
+                    const standard = e.target.standard.value;
+                    const password = e.target.password.value;
+
+                    if (!name || !age || !standard || !password) {
+                        state.authPage.error = 'Please fill all fields.';
+                        render();
+                        return;
+                    }
+                    handleStudentSelfRegister({ ...state.authPage.registrationData, name, age, standard }, password);
+                });
+            }
+        }
+        
+        function attachStudentHomeListeners() {
+            document.querySelectorAll('.start-quiz-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.currentModuleId = parseInt(btn.dataset.moduleId, 10);
+                    state.currentQuizPart = parseInt(btn.dataset.quizPart, 10);
+                    state.currentPage = 'quiz';
+                    render();
+                });
+            });
+            document.querySelectorAll('.upload-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const challengeId = btn.dataset.challengeId;
+                    document.getElementById('upload-modal-container').innerHTML = renderUploadModal(challengeId);
+                    
+                    const modal = document.getElementById('upload-modal');
+                    const fileInput = document.getElementById('file-input');
+                    const preview = document.getElementById('image-preview');
+                    const submitBtn = document.getElementById('submit-upload-btn');
+                    const cancelBtn = document.getElementById('cancel-upload-btn');
+                    
+                    cancelBtn.addEventListener('click', () => modal.remove());
+                    
+                    fileInput.addEventListener('change', (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            preview.src = URL.createObjectURL(file);
+                            preview.classList.remove('hidden');
+                            submitBtn.disabled = false;
+                        }
+                    });
+                    
+                    submitBtn.addEventListener('click', () => {
+                        const file = fileInput.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                submitChallenge(challengeId, reader.result);
+                                modal.remove();
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                });
+            });
+        }
+        
+        function attachTeacherDashboardListeners() {
+             document.querySelectorAll('.teacher-view-btn').forEach(btn => {
+                 btn.addEventListener('click', () => {
+                     state.teacherDashboard.view = btn.dataset.view;
+                     render();
+                 });
+             });
+            
+            if (state.teacherDashboard.view === 'challenges') {
+                attachManageChallengesListeners();
+            }
+        }
+        
+        function attachTeacherDetailsListeners() {
+            const form = document.getElementById('teacher-details-form');
+            if (form) {
+                form.addEventListener('submit', e => {
+                    e.preventDefault();
+                    const name = e.target.name.value;
+                    const subjects = e.target.subjects.value;
+                    handleTeacherDetailsUpdate(name, subjects);
+                });
+            }
+        }
+        
+        function attachTeacherProfileListeners() {
+            // Edit details form
+            const editDetailsForm = document.getElementById('edit-teacher-details-form');
+            if (editDetailsForm) {
+                editDetailsForm.addEventListener('submit', e => {
+                    e.preventDefault();
+                    const name = e.target.name.value;
+                    const subjects = e.target.subjects.value;
+                    handleTeacherDetailsUpdate(name, subjects);
+                    const feedbackEl = document.getElementById('edit-details-feedback');
+                    feedbackEl.textContent = 'Details updated successfully!';
+                    feedbackEl.className = 'mt-2 text-sm text-green-600';
+                    setTimeout(() => render(), 1500);
+                });
+            }
+
+            // Change password form
+            const passwordForm = document.getElementById('change-password-form');
+            if (passwordForm) {
+                 passwordForm.addEventListener('submit', e => {
+                    e.preventDefault();
+                    const newPassword = e.target.newPassword.value;
+                    const confirmPassword = e.target.confirmPassword.value;
+                    const feedbackEl = document.getElementById('password-feedback');
+
+                    if (newPassword.length < 6) {
+                        feedbackEl.textContent = 'Password must be at least 6 characters long.';
+                        feedbackEl.className = 'mt-2 text-sm text-red-600';
+                        return;
+                    }
+                    if (newPassword !== confirmPassword) {
+                        feedbackEl.textContent = 'Passwords do not match. Please try again.';
+                        feedbackEl.className = 'mt-2 text-sm text-red-600';
+                        return;
+                    }
+
+                    handleTeacherPasswordUpdate(newPassword);
+                    
+                    feedbackEl.textContent = 'Password updated successfully!';
+                    feedbackEl.className = 'mt-2 text-sm text-green-600';
+                    e.target.reset();
+                });
+            }
+        }
+
+        function attachManageChallengesListeners() {
+            const showFormBtn = document.getElementById('show-create-challenge-form');
+            const formContainer = document.getElementById('create-challenge-form-container');
+            showFormBtn.addEventListener('click', () => {
+                formContainer.classList.toggle('hidden');
+            });
+            
+            const createForm = document.getElementById('create-challenge-form');
+            createForm.addEventListener('submit', e => {
+                e.preventDefault();
+                const newChallenge = {
+                    title: e.target.title.value,
+                    description: e.target.description.value,
+                    points: parseInt(e.target.points.value, 10)
+                };
+                createChallenge(newChallenge);
+            });
+            
+            document.querySelectorAll('.approve-btn').forEach(btn => {
+                btn.addEventListener('click', () => approveChallenge(btn.dataset.challengeId, btn.dataset.studentId, parseInt(btn.dataset.points, 10)));
+            });
+            
+            document.querySelectorAll('.reject-btn').forEach(btn => {
+                btn.addEventListener('click', () => rejectChallenge(btn.dataset.challengeId, btn.dataset.studentId));
+            });
+            
+            document.querySelectorAll('.view-proof-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const photoUrl = btn.dataset.photoUrl;
+                    const modalContainer = document.getElementById('photo-viewer-modal-container');
+                    modalContainer.innerHTML = `
+                               <div id="photo-viewer-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                                   <div class="p-4 bg-white rounded-lg relative">
+                                       <button class="absolute -top-3 -right-3 bg-white rounded-full p-1 shadow-lg">&times;</button>
+                                       <img src="${photoUrl}" alt="Submission Proof" class="max-w-full md:max-w-2xl max-h-screen rounded-md"/>
+                                   </div>
+                               </div>
+                    `;
+                    document.getElementById('photo-viewer-modal').addEventListener('click', () => modalContainer.innerHTML = '');
+                });
+            });
+        }
+
+        function attachSegregationGameListeners() {
+            const levelSelectionScreen = document.getElementById('game-level-selection');
+            const playScreen = document.getElementById('game-play-screen');
+            const endScreen = document.getElementById('game-end-screen');
+
+            let timeLeft = 0;
+            let gameScore = 0;
+
+            const LEVEL_CONFIG = {
+                1: { name: "Easy 1", itemCount: 8, timeLimit: 45, pointsPerItem: 5, badge: 'sorting_sprout' },
+                2: { name: "Easy 2", itemCount: 10, timeLimit: 50, pointsPerItem: 5, badge: 'sorting_sprout' },
+                3: { name: "Medium 1", itemCount: 12, timeLimit: 45, pointsPerItem: 10, badge: 'recycling_ranger' },
+                4: { name: "Medium 2", itemCount: 15, timeLimit: 50, pointsPerItem: 10, badge: 'recycling_ranger' },
+                5: { name: "Hard 1", itemCount: 18, timeLimit: 45, pointsPerItem: 15, badge: 'eco_legend' },
+                6: { name: "Hard 2", itemCount: 20, timeLimit: 45, pointsPerItem: 15, badge: 'eco_legend' }
+            };
+
+            const BINS_CONFIG = [
+                { name: 'Wet Waste', types: ['wet'], color: 'bg-green-200', icon: '🌿' },
+                { name: 'Dry Waste', types: ['dry'], color: 'bg-blue-200', icon: '📦' }
+            ];
+
+            document.querySelectorAll('.start-game-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const level = parseInt(btn.dataset.level, 10);
+                    levelSelectionScreen.classList.add('hidden');
+                    playScreen.classList.remove('hidden');
+                    endScreen.classList.add('hidden');
+                    initializeGame(level);
+                });
+            });
+            
+            function initializeGame(level) {
+                if (gameTimerInterval) clearInterval(gameTimerInterval);
+                const config = LEVEL_CONFIG[level];
+                const itemsArea = document.getElementById('waste-items-area');
+                const binsArea = document.getElementById('bins-area');
+                itemsArea.innerHTML = '';
+                binsArea.innerHTML = '';
+                gameScore = 0;
+                timeLeft = config.timeLimit;
+                
+                document.getElementById('game-score-display').textContent = `Score: 0`;
+                document.getElementById('game-timer').textContent = `Time: ${timeLeft}s`;
+                document.getElementById('game-level-display').textContent = `Level ${level}`;
+
+
+                const gameItems = [...WASTE_ITEM_BANK].sort(() => 0.5 - Math.random()).slice(0, config.itemCount);
+
+                gameItems.forEach((item, index) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.id = `item-${index}`;
+                    itemEl.dataset.category = item.category;
+                    itemEl.draggable = true;
+                    itemEl.textContent = item.name;
+                    itemEl.className = 'waste-item text-4xl cursor-grab p-2 rounded-lg bg-white shadow';
+                    itemsArea.appendChild(itemEl);
+                });
+
+                BINS_CONFIG.forEach(bin => {
+                    const binEl = document.createElement('div');
+                    binEl.className = `bin p-4 rounded-lg text-center border-2 border-dashed transition-transform ${bin.color} relative`;
+                    binEl.dataset.types = JSON.stringify(bin.types);
+                    binEl.innerHTML = `<p class="text-5xl">${bin.icon}</p><p class="font-bold mt-2">${bin.name}</p>`;
+                    binsArea.appendChild(binEl);
+                });
+
+                addDragDropListeners(level);
+
+                gameTimerInterval = setInterval(() => {
+                    timeLeft--;
+                    document.getElementById('game-timer').textContent = `Time: ${timeLeft}s`;
+                    if (timeLeft <= 0) {
+                        handleGameOver(level);
+                    }
+                }, 1000);
+            }
+
+            function addDragDropListeners(level) {
+                const items = document.querySelectorAll('.waste-item');
+                const bins = document.querySelectorAll('.bin');
+                const feedbackEl = document.getElementById('game-feedback');
+                const scoreDisplay = document.getElementById('game-score-display');
+                const config = LEVEL_CONFIG[level];
+
+                items.forEach(item => {
+                    item.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', e.target.id);
+                        setTimeout(() => item.classList.add('dragging'), 0);
+                    });
+                    item.addEventListener('dragend', () => item.classList.remove('dragging'));
+                });
+
+                bins.forEach(bin => {
+                    bin.addEventListener('dragover', (e) => { e.preventDefault(); bin.classList.add('drag-over'); });
+                    bin.addEventListener('dragleave', () => bin.classList.remove('drag-over'));
+                    bin.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        bin.classList.remove('drag-over');
+                        const id = e.dataTransfer.getData('text/plain');
+                        const draggedItem = document.getElementById(id);
+                        
+                        const itemCategory = draggedItem.dataset.category;
+                        const acceptedTypes = JSON.parse(bin.dataset.types);
+
+                        if (acceptedTypes.includes(itemCategory)) {
+                            draggedItem.remove();
+                            feedbackEl.textContent = "Correct! ✅";
+                            feedbackEl.className = 'text-center font-bold mt-4 text-2xl text-green-600 h-8';
+                            gameScore += config.pointsPerItem;
+                            scoreDisplay.textContent = `Score: ${gameScore}`;
+                            
+                            if (document.querySelectorAll('.waste-item').length === 0) {
+                                handleLevelComplete(level);
+                            }
+                        } else {
+                            gameScore = Math.max(0, gameScore - (config.pointsPerItem / 2));
+                            scoreDisplay.textContent = `Score: ${gameScore}`;
+                            const pop = document.createElement('div');
+                            pop.textContent = '-5 pts ❌';
+                            pop.className = 'feedback-pop';
+                            bin.appendChild(pop);
+                            setTimeout(() => pop.remove(), 1500);
+                            feedbackEl.textContent = "Wrong Bin! ❌";
+                            feedbackEl.className = 'text-center font-bold mt-4 text-2xl text-red-600 h-8';
+                        }
+                        setTimeout(() => feedbackEl.textContent = '', 1500);
+                    });
+                });
+            }
+
+            function handleGameOver(level) {
+                clearInterval(gameTimerInterval);
+                gameTimerInterval = null;
+
+                state.user.points = (state.user.points || 0) + gameScore;
+                state.users = state.users.map(u => u.id === state.user.id ? state.user : u);
+                saveUsers(state.users);
+                
+                document.getElementById('game-score').textContent = gameScore;
+                document.getElementById('end-screen-title').textContent = "Time's Up!";
+                document.getElementById('badge-earned-display').classList.add('hidden'); // No badge on timeout
+                playScreen.classList.add('hidden');
+                endScreen.classList.remove('hidden');
+            }
+
+            function handleLevelComplete(level) {
+                clearInterval(gameTimerInterval);
+                gameTimerInterval = null;
+
+                const config = LEVEL_CONFIG[level];
+                const badgeKey = config.badge;
+                const userAlreadyHasBadge = state.user.badges.includes(badgeKey);
+                
+                state.user.points = (state.user.points || 0) + gameScore;
+                
+                if (!userAlreadyHasBadge) {
+                    state.user.badges.push(badgeKey);
+                    const badge = BADGE_DEFINITIONS[badgeKey];
+                    document.getElementById('badge-info').innerHTML = `
+                        <span class="text-6xl">${badge.icon}</span>
+                        <p class="font-semibold mt-2">${badge.name}</p>
+                    `;
+                    document.getElementById('badge-earned-display').classList.remove('hidden');
+                } else {
+                     document.getElementById('badge-earned-display').classList.add('hidden');
+                }
+
+                state.users = state.users.map(u => u.id === state.user.id ? state.user : u);
+                saveUsers(state.users);
+                
+                document.getElementById('game-score').textContent = gameScore;
+                document.getElementById('end-screen-title').textContent = `Level ${level} Complete!`;
+                playScreen.classList.add('hidden');
+                endScreen.classList.remove('hidden');
+            }
+        }
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', render);
+
+    </script>
+</body>
+</html>
