@@ -238,7 +238,7 @@
             const savedChallenges = localStorage.getItem('ecoChampsChallenges');
             
             const defaultUsers = [
-                { id: 'teacher1', name: 'Mr. Sharma', email: 'sharma@eco.com', password: '123', role: 'teacher', subjects: ['Environmental Studies'], profileComplete: true },
+                { id: 'teacher1', name: 'Mr. Sharma', email: 'sharma@eco.com', password: '123', role: 'teacher', subjects: [], profileComplete: false },
             ];
             const defaultChallenges = [
                 { id: 1, title: 'Plant a tree and upload proof', description: 'Find a suitable spot, plant a sapling, water it, and upload a picture.', points: 50, submissions: [] },
@@ -805,7 +805,7 @@
                                     <p>${s.studentName} <span class="text-gray-500">submitted for</span> "${challenge.title}"</p>
                                     <button data-view="challenges" class="teacher-view-btn text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-md hover:bg-blue-200">Review</button>
                                 </div>
-                             `
+                              `
                         }).join('') : '<p class="text-gray-500">No pending submissions.</p>'}
                     </div>
                 </div>
@@ -888,12 +888,15 @@
             const quizQuestions = questionBank[currentQuizPart];
             let currentQuestionIndex = 0;
             let score = 0;
-            let timeLeft = 60;
+            let correctAnswers = 0;
+            let wrongAnswers = 0;
+            let timeLeft = 60; // Set timer to 60 seconds
             const totalParts = state.modules.find(m => m.id === currentModuleId).parts;
 
             function updateQuizUI() {
                 if (currentQuestionIndex >= quizQuestions.length || timeLeft <= 0) {
                     clearInterval(quizTimer);
+                    quizTimer = null;
                     
                     if (state.user) {
                         state.user.points = (state.user.points || 0) + score;
@@ -902,17 +905,24 @@
                         if (!state.user.quizProgress[currentModuleId] || state.user.quizProgress[currentModuleId] < currentQuizPart) {
                             state.user.quizProgress[currentModuleId] = currentQuizPart;
                         }
-                        
                         state.users = state.users.map(u => u.id === state.user.id ? state.user : u);
                         saveUsers(state.users);
                     }
                     
                     const isLastPart = currentQuizPart >= totalParts;
+                    const totalQuestions = quizQuestions.length;
+                    const answeredQuestions = correctAnswers + wrongAnswers;
+                    const unansweredQuestions = totalQuestions - answeredQuestions;
+                    const totalWrong = wrongAnswers + unansweredQuestions;
                     
                     root.innerHTML = `
                         <div class="text-center p-8 bg-white rounded-2xl shadow-lg flex flex-col items-center">
                             <h2 class="text-3xl font-bold mb-4">${timeLeft <= 0 ? "Time's Up!" : "Quiz Part Complete!"}</h2>
-                            <p class="text-xl text-gray-600 mb-6">You earned <span class="font-bold text-green-500">${score}</span> points!</p>
+                            <p class="text-xl text-gray-600 mb-2">You earned <span class="font-bold text-green-500">${score}</span> points!</p>
+                            <div class="flex gap-6 text-lg my-4">
+                                <p>Correct: <span class="font-bold text-green-500">${correctAnswers}</span></p>
+                                <p>Wrong: <span class="font-bold text-red-500">${totalWrong}</span></p>
+                            </div>
                             <div class="flex space-x-4">
                                 <button data-navigate="leaderboard" class="bg-yellow-500 text-white font-bold py-3 px-6 rounded-lg">🏆 View Leaderboard</button>
                                 ${!isLastPart && timeLeft > 0 ? `
@@ -927,13 +937,12 @@
 
                 const currentQuestion = quizQuestions[currentQuestionIndex];
                 const progress = ((currentQuestionIndex + 1) / quizQuestions.length) * 100;
-                const module = state.modules.find(m => m.id === currentModuleId);
 
                 root.innerHTML = `
                     <div class="p-6 bg-white rounded-2xl shadow-lg relative flex flex-col h-full">
                         <div class="mb-6">
                             <div class="flex justify-between items-center mb-2">
-                                <span class="text-sm font-semibold text-red-500">Time Left: ${timeLeft}s</span>
+                                <span id="quiz-timer-display" class="text-sm font-semibold text-red-500">Time Left: ${timeLeft}s</span>
                                 <span class="text-sm font-bold text-green-500">Score: ${score} points</span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-2.5">
@@ -949,13 +958,16 @@
                         </div>
                     </div>`;
                 
-                attachAllListeners(); // Attach listeners for quiz buttons
+                attachAllListeners(); 
 
                 document.querySelectorAll('.answer-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const isCorrect = btn.textContent === currentQuestion.correctAnswer;
                         if (isCorrect) {
                             score += currentQuestion.points;
+                            correctAnswers++;
+                        } else {
+                            wrongAnswers++;
                         }
                         
                         document.querySelectorAll('.answer-btn').forEach(b => {
@@ -974,20 +986,18 @@
 
             quizTimer = setInterval(() => {
                 timeLeft--;
-                // Check if the element exists before trying to update it
-                const timerEl = document.getElementById('game-timer');
-                if(timerEl) {
-                    timerEl.textContent = `Time: ${timeLeft}s`;
-                    if (timeLeft <= 0) {
-                       updateQuizUI();
-                    }
-                } else {
-                    clearInterval(quizTimer);
+                const timerDisplay = document.getElementById('quiz-timer-display');
+                if (timerDisplay) {
+                    timerDisplay.textContent = `Time Left: ${timeLeft}s`;
+                }
+                if (timeLeft <= 0) {
+                   updateQuizUI();
                 }
             }, 1000);
 
             updateQuizUI();
         }
+
 
         function renderLeaderboardScreen() {
              const leaderboardData = state.users.filter(u => u.role === 'student').sort((a,b) => (b.points || 0) - (a.points || 0));
@@ -998,16 +1008,16 @@
              
              return `
                  <div class="p-6 bg-white rounded-2xl shadow-lg">
-                     <h1 class="text-4xl font-bold text-center mb-6">Leaderboard</h1>
-                     <div class="space-y-3">
-                     ${leaderboardData.map((player, index) => `
-                         <div class="flex items-center p-4 rounded-lg ${state.user && player.id === state.user.id ? 'bg-green-100 border-2 border-green-400' : 'bg-gray-50'}">
-                             <div class="text-2xl font-bold w-12 ${getRankIcon(index)}">${getRankIcon(index)}</div>
-                             <div class="flex-grow"><p class="font-bold text-lg">${player.name}</p></div>
-                             <div class="font-bold text-xl text-green-600">${player.points || 0} pts</div>
-                         </div>`).join('')}
-                     </div>
-                      <button data-navigate="${state.user.role === 'student' ? 'studentHome' : 'teacherHome'}" class="mt-8 w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg">🏠 Back to Home</button>
+                      <h1 class="text-4xl font-bold text-center mb-6">Leaderboard</h1>
+                      <div class="space-y-3">
+                      ${leaderboardData.map((player, index) => `
+                          <div class="flex items-center p-4 rounded-lg ${state.user && player.id === state.user.id ? 'bg-green-100 border-2 border-green-400' : 'bg-gray-50'}">
+                              <div class="text-2xl font-bold w-12 ${getRankIcon(index)}">${getRankIcon(index)}</div>
+                              <div class="flex-grow"><p class="font-bold text-lg">${player.name}</p></div>
+                              <div class="font-bold text-xl text-green-600">${player.points || 0} pts</div>
+                          </div>`).join('')}
+                      </div>
+                       <button data-navigate="${state.user.role === 'student' ? 'studentHome' : 'teacherHome'}" class="mt-8 w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg">🏠 Back to Home</button>
                  </div>
              `;
         }
@@ -1019,11 +1029,11 @@
                 <div>
                     ${renderHeader('My Profile')}
                      <div class="mb-4">
-                        <button data-navigate="studentHome" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 flex items-center gap-2">
+                         <button data-navigate="studentHome" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 flex items-center gap-2">
                              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path></svg>
-                            <span>Back to Home</span>
-                        </button>
-                    </div>
+                             <span>Back to Home</span>
+                         </button>
+                     </div>
                     <div class="grid md:grid-cols-3 gap-6">
                         <div class="md:col-span-1 p-6 bg-white rounded-xl shadow-md text-center">
                             <img src="${profilePicSrc}" id="profile-pic-preview" alt="Profile Picture" class="w-32 h-32 rounded-full mx-auto mb-4 object-cover border-4 border-gray-200">
@@ -1216,7 +1226,10 @@
                         clearInterval(gameTimerInterval);
                         gameTimerInterval = null;
                     }
-                    if(quizTimer) clearInterval(quizTimer);
+                    if(quizTimer) {
+                        clearInterval(quizTimer);
+                        quizTimer = null;
+                    }
                     render();
                 });
             });
@@ -1490,12 +1503,12 @@
                     const photoUrl = btn.dataset.photoUrl;
                     const modalContainer = document.getElementById('photo-viewer-modal-container');
                     modalContainer.innerHTML = `
-                               <div id="photo-viewer-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-                                   <div class="p-4 bg-white rounded-lg relative">
-                                       <button class="absolute -top-3 -right-3 bg-white rounded-full p-1 shadow-lg">&times;</button>
-                                       <img src="${photoUrl}" alt="Submission Proof" class="max-w-full md:max-w-2xl max-h-screen rounded-md"/>
-                                   </div>
-                               </div>
+                                <div id="photo-viewer-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                                    <div class="p-4 bg-white rounded-lg relative">
+                                        <button class="absolute -top-3 -right-3 bg-white rounded-full p-1 shadow-lg">&times;</button>
+                                        <img src="${photoUrl}" alt="Submission Proof" class="max-w-full md:max-w-2xl max-h-screen rounded-md"/>
+                                    </div>
+                                </div>
                     `;
                     document.getElementById('photo-viewer-modal').addEventListener('click', () => modalContainer.innerHTML = '');
                 });
@@ -1686,3 +1699,4 @@
     </script>
 </body>
 </html>
+
